@@ -67,11 +67,14 @@ def image_info(files):
 
 
 def texture_file(f, name, dim):
-    mip_cmd = (["magick", "convert", f, "-write", "RGB:-"]
+    mip_cmd = (["magick", "convert", f, "-depth", "8", "-write", "RGB:-"]
                + ["-resize", "50%", "-write", "RGB:-"] * (MIPMAP_NUM - 2)
                + ["-resize", "50%", "RGB:-"])
     rgb_img = run_cmd(mip_cmd).stdout
     rgb_size = len(rgb_img) // 3
+    
+    if rgb_size != sum([dim[0]*dim[1] // 4**i for i in range(MIPMAP_NUM)]):
+        error_exit("Internal error.")
 
     h_res = dim[0]
     while rgb_size % h_res:
@@ -133,7 +136,6 @@ def main():
     input_files = sys.argv[1: -1]
     input_names, input_dims = image_info(input_files)
 
-    def temp(x): return texture_file(*x)
     pool = multiprocessing.Pool()
     texture_files = pool.map(
         texture_helper, zip(
