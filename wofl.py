@@ -5,7 +5,10 @@ import multiprocessing
 
 WOFL_VERSION = "1.0"
 MIPMAP_NUM = 4
-
+TEXTURE_DIV = 16
+PALETTE_SIZE = 256
+WAD_HEADER_OFFSET = 12
+TEXTURE_HEADER_SIZE = 40
 
 def error_exit(msg):
     print(msg.strip())
@@ -32,11 +35,10 @@ def image_info(files):
     proc = run_cmd(["magick", "identify", "-format", "%w %h\n"] + files)
 
     names, dims = [], []
-    div = 2 ** (MIPMAP_NUM - 1)
 
     for line, cur_file in zip(proc.stdout.decode().splitlines(), files):
         w, h = [int(i) for i in line.split()]
-        if w % div or h % div:
+        if w % TEXTURE_DIV or h % TEXTURE_DIV:
             error_exit(
                 cur_file +
                 " has invalid resolution " +
@@ -54,7 +56,7 @@ def image_info(files):
             name = cur_file
 
         name = bytes(name, encoding="ascii")
-        name = name[:min(len(name), 16)]
+        name = name[:min(len(name), 15)]
         names.append(name)
 
     name_set = set()
@@ -87,23 +89,22 @@ def texture_file(f, name, dim):
 
     num_colors = (len(map_img) - rgb_size) // 3
 
-    mip_offset = [40 + 2]
+    mip_offset = [TEXTURE_HEADER_SIZE]
     for i in range(0, MIPMAP_NUM - 1):
         mip_offset.append(mip_offset[-1] + dim[0] * dim[1] // 4**i)
 
     header = name.ljust(16, b'\0') + \
         b''.join([int_b(n) for n in dim + mip_offset])
-
+    
     return b''.join([header,
-                     b'\0' * 2,
                      map_img[3 * num_colors:],
-                     b'\0' * 2,
-                     map_img[: 3 * num_colors].ljust(256 * 3, bytes([0xff])),
+                     int_b(PALETTE_SIZE, l=2),
+                     map_img[: 3 * num_colors].ljust(PALETTE_SIZE * 3, bytes([0xfa])),
                      b'\0' * 2])
 
 
 def wad_file(textures):
-    texture_offset = [12]
+    texture_offset = [WAD_HEADER_OFFSET]
     for tex in textures:
         texture_offset.append(texture_offset[-1] + len(tex))
 
